@@ -14,24 +14,66 @@ the internet — without dropping either.
   from the card's own gateway or from its DHCP lease.
 * The **default-route card** carries everything no rule matches. Every other
   connected card is marked `never-default`, for IPv4 and IPv6, so the default
-  route is unambiguous.
-* Nothing happens until you **left click the panel button**, which switches
-  `DIRECT` ⇄ `SPLIT`. **Right click** opens the settings.
+  route is unambiguous. This fails closed: if the default-route card drops, no
+  other card takes the default route over. You lose the internet until it is
+  back, instead of sending it through a network you did not choose.
+* **Clicking the panel button** opens a menu under it: the *Split routing*
+  switch, one line per rule and one for the default route, each marked by
+  whether it is in effect right now, and *Settings…*. Nothing happens until
+  the switch is turned on.
+* While it is on, the routing is **kept** in line with the settings. A card
+  that reconnects gets its rules back, a card that appears is kept off the
+  default route, and settings saved meanwhile take effect immediately.
+
+## Networks: traffic and speed test
+
+The menu lists every Ethernet and Wi-Fi card in full: state, connection name,
+addresses, gateway, and whether it carries the default route, so it is
+visible where the internet goes out. Lines wrap rather than being cut short.
+
+* **Traffic now** is the card's live ↓/↑ rate, from the kernel's counters in
+  `/sys/class/net/<iface>/statistics`. It is sampled once a second, and only
+  while the menu is open.
+* **Speed test** measures one card on its own: `curl --interface <iface>`
+  (`SO_BINDTODEVICE`, no root needed) downloads up to 25 MB from and uploads
+  5 MB to `speed.cloudflare.com`, at most 15 s each. On a metered connection
+  that is up to 30 MB per test. A card with no default route has no way to
+  the internet, so the test is not run on it and the menu says why.
+
+Check the same thing from a terminal:
+
+```sh
+curl -o /dev/null --interface enp0s31f6 -w '%{speed_download} B/s\n' \
+    'https://speed.cloudflare.com/__down?bytes=25000000'
+```
 
 ## Safety
 
-* Every change goes through NetworkManager over D-Bus. No root, no scripts,
-  no subprocesses.
-* Only the **running** connection is changed, via `Device.reapply()`. Saved
-  profiles are never written to, so a reboot, a NetworkManager restart or
-  reconnecting a card returns the machine to its normal routing.
+* Every routing change goes through NetworkManager over D-Bus. No root, no
+  scripts, no subprocesses. The one subprocess is the speed test below, and
+  it runs only when you click it.
+* The **running** connection is changed via `Device.reapply()`, and every
+  Ethernet/Wi-Fi profile is changed **in NetworkManager's memory only**
+  (`Update2` with `IN_MEMORY`). Nothing is written to disk — on Ubuntu that
+  would also leave a file in `/etc/netplan`. NetworkManager keeps in-memory
+  profiles under `/run`, so they survive its restart; a reboot drops them.
+* Because the profiles carry the split, a card that reconnects comes up
+  already split: NetworkManager never gives it a default route it should not
+  have, not even for a moment. Profiles no card is running are covered too,
+  so a Wi-Fi network you join later is kept off the default route from its
+  first second. The one exception is a profile NetworkManager creates on the
+  spot, for an adapter it has never seen: its first connection carries
+  NetworkManager's normal routing until the extension reapplies (it waits
+  400 ms for NetworkManager's signals to settle).
+* The switch is remembered, so after a reboot split routing is put back when
+  you log in. Between boot and login, routing is NetworkManager's normal one.
 * Switching back undoes **exactly** what was applied. Routes you already had
   are left alone, and each card's previous `never-default` value is restored
   rather than assumed.
-* If part of a switch fails, or stops being in effect later because a card
-  dropped, the icon turns into a warning and a notification names exactly what
-  was lost — rather than the panel claiming everything is fine. The undo list
-  still covers whatever did change.
+* If part of the configuration is not in effect — a reapply failed, or a card
+  is down — the icon turns into a warning, the menu marks the line, and a
+  notification names it, rather than the panel claiming everything is fine.
+  The undo list still covers whatever did change.
 
 ## Requirements
 
@@ -104,12 +146,17 @@ Submitting cannot be undone, so the default is neither.
 
 ## Undo from a terminal
 
+Turn the switch off from a terminal; the extension then undoes exactly what
+it changed, running connections and profiles alike:
+
 ```sh
-nmcli device reapply <interface>
+gsettings --schemadir ~/.local/share/gnome-shell/extensions/split-routing@tannc28/schemas \
+    set org.gnome.shell.extensions.split-routing split-enabled false
 ```
 
-No root needed; this discards every runtime change on that card, including
-this extension's.
+Without the extension running, a reboot does it: nothing was written to disk.
+`nmcli device reapply` does not: it re-applies the profile, which still
+carries the split.
 
 ## License
 

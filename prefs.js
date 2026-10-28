@@ -110,11 +110,11 @@ export default class SplitRoutingPrefs extends ExtensionPreferences {
         howto.add_row(infoRow('1 · Add a rule',
             'A rule is a subnet (CIDR) plus the card it should go out. IPv4 and IPv6 are both accepted, for example 10.0.0.0/8 or fd00::/48. Add as many as you need with the + button.'));
         howto.add_row(infoRow('2 · Pick the default-route card',
-            'Where everything else goes. Every other connected card is marked never-default, for IPv4 and IPv6, so the default route is unambiguous.'));
+            'Where everything else goes. Every other connected card is marked never-default, for IPv4 and IPv6, so the default route is unambiguous. If this card drops, no other card takes over: you lose the internet rather than send it through a network you did not choose.'));
         howto.add_row(infoRow('3 · Save',
             'Saving only stores your settings. It does not change your network.'));
-        howto.add_row(infoRow('4 · Click the panel button',
-            'A left click switches DIRECT ⇄ SPLIT, and a right click reopens this window. If part of the configuration later stops being in effect — a card drops, for example — the icon turns into a warning and a notification names what was lost.'));
+        howto.add_row(infoRow('4 · Switch it on from the panel menu',
+            'Click the panel button: a menu opens with the Split routing switch, one line per rule and one for the default route, and Settings. While it is on, a card that reconnects gets its rules back on its own. A line that is not in effect right now is marked with a warning, and so is the icon.'));
         howto.add_row(infoRow('Gateways are automatic',
             'You never type a gateway. It is detected per card from its own gateway, or from its DHCP lease when the card is marked never-default.'));
         introGroup.add(howto);
@@ -184,8 +184,8 @@ export default class SplitRoutingPrefs extends ExtensionPreferences {
                 rules: currentRules(),
                 defaultDevice: ifaces[defaultRow.get_selected() - 1] ?? '',
             });
-            previewRow.title = lines.length ? 'On the next switch:' : 'Nothing to do yet';
-            previewRow.subtitle = lines.join('\n');
+            previewRow.title = lines.length ? 'While split routing is on:' : 'Nothing to do yet';
+            previewRow.subtitle = lines.map(line => line.text).join('\n');
         };
 
         const addRuleRow = (subnet = '', device = '') => {
@@ -280,13 +280,13 @@ export default class SplitRoutingPrefs extends ExtensionPreferences {
             subtitle: 'Short answer: yes — nothing permanent is written',
         });
         safety.add_row(infoRow('Nothing happens until you switch it on',
-            'Rules saved here are only settings. The network changes when you left click the panel button and it switches to SPLIT.'));
-        safety.add_row(infoRow('Changes are runtime-only',
-            'The running connection is changed through NetworkManager reapply(); your saved profiles are never written to. A reboot, a NetworkManager restart or reconnecting a card returns you to normal routing.'));
+            'Rules saved here are only settings. The network changes when you turn on the Split routing switch in the panel menu. While it is on, saving here takes effect right away.'));
+        safety.add_row(infoRow('Nothing is written to disk',
+            'The running connection is changed through NetworkManager reapply(), and your Ethernet/Wi-Fi profiles are changed in NetworkManager’s memory only, so a card that reconnects comes up already split. A reboot drops all of it. The switch is remembered, so after a reboot the extension puts split routing back when you log in.'));
         safety.add_row(infoRow('Undo removes exactly what was added',
             'Routes you already had are left alone, and each card’s previous never-default value is restored rather than assumed.'));
         safety.add_row(infoRow('Uninstalling is safe',
-            'Nothing permanent is written, so removing the extension leaves no routing behind. For an instant clean state, switch back to NORMAL first. From a terminal, “nmcli device reapply” on the card does the same thing.'));
+            'Nothing is written to disk, so a reboot after removing the extension leaves no routing behind. Turn the switch off before removing it: that restores the profiles in memory right away.'));
         safetyGroup.add(safety);
 
         /* -------------------------------------------------------------- save */
@@ -299,10 +299,9 @@ export default class SplitRoutingPrefs extends ExtensionPreferences {
             settings.set_string('rules', JSON.stringify(rules));
             settings.set_string('default-device', ifaces[defaultRow.get_selected() - 1] ?? '');
 
-            const applied = Engine.parseRecord(settings.get_string('undo-record')).devices.length > 0;
-            toast(applied
-                ? `Saved ${rules.length} rule(s). Split routing is currently ON — restore normal routing and switch it on again for the new rules to take effect.`
-                : `Saved ${rules.length} rule(s). Nothing changes until you switch to split routing from the panel menu.`);
+            toast(settings.get_boolean('split-enabled')
+                ? `Saved ${rules.length} rule(s). Split routing is on, so they take effect now.`
+                : `Saved ${rules.length} rule(s). Nothing changes until you turn on split routing from the panel menu.`);
         });
         actionGroup.add(saveBtn);
 

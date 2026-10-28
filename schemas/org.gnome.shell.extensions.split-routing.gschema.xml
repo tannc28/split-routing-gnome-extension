@@ -19,6 +19,16 @@
         split routing is on. Empty means the default route is left untouched.
       </description>
     </key>
+    <key name="split-enabled" type="b">
+      <default>false</default>
+      <summary>Split routing switched on</summary>
+      <description>
+        Whether split routing is on. While it is, the extension keeps the running
+        routing in line with the rules and the default-route card: a card that
+        reconnects gets its rules back, and when the default-route card is gone
+        no other card takes the default route over.
+      </description>
+    </key>
     <key name="undo-record" type="s">
       <default>"{}"</default>
       <summary>Undo record</summary>
